@@ -1,0 +1,326 @@
+<?php
+namespace ProcessWire;
+
+class ProcessWesanoxApi extends Process implements Module
+{
+    public static function getModuleInfo()
+    {
+        return array(
+            'title' => 'wesanox API Process',
+            'summary' => 'A little API Connector for Processwire.',
+            'version' => '0.0.1',
+            'author' => 'wesanox',
+            'icon' => 'cogs',
+            'page'       => array(
+                'name' => 'wesanox-api',
+                'title' => 'Apis',
+            ),
+            'requires' => 'WesanoxApi',
+        );
+    }
+
+    protected Page $template_options;
+
+    public function __construct()
+    {
+        $this->template_options = $this->pages->get('template=options_generals');
+    }
+
+    /**
+     * @return void
+     * @throws WireException
+     * @throws WirePermissionException
+     */
+    public function init() : void
+    {
+        $this->wire('modules')->get('JqueryUI')->use('vex');
+        parent::init();
+    }
+
+    /**
+     * @return string
+     * @throws WirePermissionException
+     */
+    public function ___execute() : string
+    {
+        $button = $this->modules->get('InputfieldButton');
+        $button->value = __('Add new');
+        $button->icon = 'plus-circle';
+        $button->attr('href', './add/');
+        $addButton = $button->render();
+
+        // Return view data
+        return $this->renderTable() . $addButton;
+    }
+
+    /**
+     * @return mixed
+     * @throws WirePermissionException
+     */
+    public function ___executeAdd(): string
+    {
+        if ($this->input->post->submit) {
+            $api_name = $this->input->post->api_name;
+            $api_url = $this->input->post->api_url;
+            $api_key = $this->input->post->api_key;
+            $api_secret = $this->input->post->api_secret;
+
+            if (empty($api_name) || empty($api_url) || empty($api_key) || empty($api_secret)) {
+                $this->error(__('Please fill in all fields'));
+            } else {
+                $this->saveApi(null, $api_name, $api_url, $api_key, $api_secret);
+                $this->message(__('Api added'));
+                $this->session->redirect($this->page->url);
+            }
+
+            $data = compact('api_name', 'api_url', 'api_key', 'api_secret');
+        } else {
+            $data = [];
+        }
+
+        $form = $this->buildForm($data);
+        return $form->render();
+    }
+
+    /**
+     * @return string
+     */
+    public function ___executeEdit(): string
+    {
+        $id = $this->input->get('id');
+        $api = $this->template_options->repeater_api->get("id=$id");
+
+        if (!$api instanceof Page || !$api->id) {
+            $this->error(__("API mit ID $id nicht gefunden"));
+        }
+
+        if ($this->input->post->submit) {
+            $api_name = $this->input->post->api_name;
+            $api_url = $this->input->post->api_url;
+            $api_key = $this->input->post->api_key;
+            $api_secret = $this->input->post->api_secret;
+
+            if (empty($api_name) || empty($api_url) || empty($api_key) || empty($api_secret)) {
+                $this->error(__('Please fill in all fields'));
+            } else {
+                $this->saveApi($id, $api_name, $api_url, $api_key, $api_secret);
+                $this->message(__('Api saved'));
+            }
+
+            $data = compact('api_name', 'api_url', 'api_key', 'api_secret');
+        } else {
+            $data = [
+                'api_name' => $api->api_name,
+                'api_url' => $api->api_url,
+                'api_key' => $api->api_key,
+                'api_secret' => $api->api_secret,
+            ];
+        }
+
+        if ($this->input->get('try')) {
+            $content = json_decode($this->tryApi($id));
+            if (isset($content->error)) {
+                $this->error(__($content->error));
+            } elseif (isset($content->success)) {
+                $this->message(__($content->success));
+            }
+        }
+
+        bd($data);
+
+        $form = $this->buildForm($data, $id);
+        $form->action = $this->page->url . 'edit?id=' . $id;
+
+        return $form->render();
+    }
+
+    /**
+     * @return void
+     * @throws WireException
+     */
+    public function ___executeDelete() : void
+    {
+        $id = $this->input->get('id');
+
+        $this->deleteApi($id);
+
+        $this->message(__('Api deleted'));
+
+        $this->session->redirect($this->page->url);
+    }
+
+    /**
+     * @return _Module|Module|string|null
+     * @throws WireException
+     * @throws WirePermissionException
+     */
+    private function buildForm(array $data = [], string $id = null): InputfieldForm
+    {
+        $form = $this->modules->get('InputfieldForm');
+        $wrapper = $this->modules->get('InputfieldWrapper');
+
+        $defaults = [
+            'api_name' => '',
+            'api_url' => '',
+            'api_key' => '',
+            'api_secret' => '',
+        ];
+        $data = array_merge($defaults, $data);
+
+        $f = $this->modules->get('InputfieldText');
+        $f->label = __('Api Name');
+        $f->description = __('Any combination of letters (a-z), numbers (0-9).');
+        $f->columnWidth = 50;
+        $f->attr('name', 'api_name');
+        $f->attr('value', $data['api_name']);
+        $f->required = true;
+        $wrapper->add($f);
+
+        $f = $this->modules->get('InputfieldText');
+        $f->label = __('API URL');
+        $f->columnWidth = 50;
+        $f->attr('name', 'api_url');
+        $f->attr('value', $data['api_url']);
+        $f->required = true;
+        $wrapper->add($f);
+
+        $f = $this->modules->get('InputfieldText');
+        $f->label = __('API Key');
+        $f->columnWidth = 50;
+        $f->attr('name', 'api_key');
+        $f->attr('value', $data['api_key']);
+        $f->required = true;
+        $wrapper->add($f);
+
+        $f = $this->modules->get('InputfieldText');
+        $f->label = __('API Secret');
+        $f->columnWidth = 50;
+        $f->attr('name', 'api_secret');
+        $f->attr('value', $data['api_secret']);
+        $f->required = true;
+        $wrapper->add($f);
+
+        $submit = $this->modules->get('InputfieldSubmit');
+        $submit->attr('name', 'submit');
+        $submit->attr('value', __('Save'));
+        $wrapper->add($submit);
+
+        // Test-Button nur bei Edit
+        if ($id !== null) {
+            $buttonTry = $this->modules->get('InputfieldButton');
+            $buttonTry->value = __('Test Connection');
+            $buttonTry->attr('href', './edit?id=' . $id . '&try=1');
+            $wrapper->add($buttonTry);
+        }
+
+        $form->add($wrapper);
+        return $form;
+    }
+
+    /**
+     * Add new API - Item or edit existing API - Item
+     *
+     * @param string|null $id
+     * @param string $api_name
+     * @param string $api_url
+     * @param string $api_key
+     * @param string $api_secret
+     * @return Page|null
+     */
+    private function saveApi(?string $id, string $api_name, string $api_url, string $api_key, string $api_secret): ?Page
+    {
+        $this->template_options->of(false);
+
+        if ($id) {
+            $api = $this->template_options->repeater_api->get("id=$id");
+
+            if (!$api instanceof Page || !$api->id) {
+                $this->error(__("API with ID $id not found"));
+            }
+
+            $api->of(false);
+        } else {
+            $api = $this->template_options->repeater_api->getNew();
+        }
+
+        $api->api_name = $api_name;
+        $api->api_url = $api_url;
+        $api->api_key = $api_key;
+        $api->api_secret = $api_secret;
+        $api->save();
+
+        $this->template_options->save();
+
+        return $api;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     * @throws WireException
+     * @throws WirePermissionException
+     */
+    private function tryApi($id)
+    {
+        $parent_module = $this->modules->get('WesanoxApi');
+
+        $api = $this->template_options->repeater_api->get("id=$id");
+
+        $headers = [
+            'wesanoxKey'    => $api->api_key,
+            'wesanoxSecret' => $api->api_secret,
+        ];
+
+        return $parent_module->connection($api->api_url, 'hello', $headers);
+    }
+
+    /**
+     * @return void
+     */
+    private function deleteApi($id): void
+    {
+        $api = $this->template_options->repeater_api->get("id=$id");
+
+        $this->template_options->of(false);
+
+        $api->delete();
+
+        $this->template_options->save();
+    }
+
+    /**
+     * @return mixed
+     * @throws WirePermissionException
+     */
+    private function renderTable() : mixed
+    {
+        $table = $this->modules->get('MarkupAdminDataTable');
+
+        $table->setSortable(false);
+        $table->setEncodeEntities(false);
+        $table->headerRow([__('Api Name'), __('Actions')]);
+
+        foreach ( $this->template_options->repeater_api AS $api) {
+            $buttonDelete = $this->modules->get('InputfieldButton');
+            $buttonDelete->value = 'delete';
+            $buttonDelete->icon = 'trash';
+            $buttonDelete->setSmall()->setSecondary();
+            $buttonDelete->attr('href', './delete/?id=' . $api->id);
+            $buttonDelete->addClass('InputfieldButtonLink');
+
+            $buttonTry = $this->modules->get('InputfieldButton');
+            $buttonTry->value = __('Test Connection');
+            $buttonTry->icon = 'cogs';
+            $buttonTry->setSmall()->setSecondary();
+            $buttonTry->attr('href', './edit?id=' . $api->id . '&try=1');
+            $buttonTry->addClass('InputfieldButtonLink');
+
+            $table->row([
+                '<a href="./edit?id=' . $api->id . '">' . $api->api_name . "</a>",
+                $buttonDelete->render() . $buttonTry->render(),
+            ]);
+        }
+
+        return $table->render();
+    }
+}

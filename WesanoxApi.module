@@ -1,0 +1,288 @@
+<?php
+namespace ProcessWire;
+
+class WesanoxApi extends WireData implements Module
+{
+    public static function getModuleInfo() : array
+    {
+        return array(
+            'title' => 'wesanox API Connector',
+            'summary' => 'A little API Connector for Processwire.',
+            'version' => '0.0.2',
+            'author' => 'André Wester',
+            'icon' => 'cogs',
+            'singular' => true,
+            'autoload' => true,
+            'installs' => ['ProcessWesanoxApi', 'FieldtypeDynamicOptions'],
+            'requires' => array(
+                'ProcessWire>=3.0.210',
+                'PHP>=8.0.0',
+            ),
+        );
+    }
+
+    protected string $template_options;
+
+    protected array $internal_modules = [
+        'FieldtypeDynamicOptions',
+    ];
+
+    public function __construct()
+    {
+        /**
+         * set the Template Name
+         */
+        $this->template_options  = 'options_generals';
+    }
+
+    /**
+     * install function for the modul
+     *
+     * @return void
+     * @throws WireException
+     * @throws WirePermissionException
+     */
+    public function ___install() : void
+    {
+        foreach ($this->internal_modules as $moduleName) {
+            if (!$this->modules->isInstalled($moduleName)) {
+                $this->modules->get($moduleName);
+            }
+        }
+
+        /**
+         * create the fields for the custom menu
+         */
+        $this->createFields($this->fields);
+
+        /**
+         * if not exists, create settings Page or add new Fields
+         * to the settingspage
+         */
+        if ( !$this->templates->get($this->template_options) ) {
+            $fg = new Fieldgroup();
+            $fg->name = $this->template_options;
+            $fg->add('title');
+            $fg->add('tab_api');
+            $fg->add('repeater_api');
+            $fg->add('tab_api_END');
+            $fg->save();
+
+            $op = new Template();
+            $op->name = $this->template_options;
+            $op->label = 'Einstellungen';
+            $op->fieldgroup = $fg;
+            $op->icon = 'cogs';
+            $op->tags = 'Options';
+            $op->noParents = -1;
+            $op->save();
+        } else {
+            $op = $this->fieldgroups->get($this->template_options);
+            $op->add('tab_api');
+            $op->add('repeater_api');
+            $op->add('tab_api_END');
+            $op->save();
+        }
+    }
+
+    /**
+     * uninstall the modul with the fields
+     *
+     * @return void
+     * @throws WireException
+     */
+    public function ___uninstall() : void
+    {
+        /**
+         * remove fields from option page
+         */
+        if($this->templates->get($this->template_options)) {
+            $op = $this->fieldgroups->get($this->template_options);
+            $op->remove('tab_api');
+            $op->remove('repeater_api');
+            $op->remove('tab_api_END');
+            $op->save();
+        }
+
+        /**
+         * delete fields
+         */
+        if ($this->fields->get('repeater_api')) $this->fields->delete($this->fields->get('repeater_api'));
+        if ($this->fields->get('api_name')) $this->fields->delete($this->fields->get('api_name'));
+        if ($this->fields->get('api_url')) $this->fields->delete($this->fields->get('api_url'));
+        if ($this->fields->get('api_key')) $this->fields->delete($this->fields->get('api_key'));
+        if ($this->fields->get('api_secret')) $this->fields->delete($this->fields->get('api_secret'));
+        if ($this->fields->get('tab_api')) $this->fields->delete($this->fields->get('tab_api'));
+        if ($this->fields->get('tab_api_END')) $this->fields->delete($this->fields->get('tab_api_END'));
+    }
+
+    /**
+     * @return void
+     */
+    public function ready() : void
+    {
+        $this->addHookAfter('FieldtypeDynamicOptions::getSelectableOptions', $this, 'provideDynamicApi');
+    }
+
+
+    /**
+     * @param HookEvent $event
+     * @return void
+     */
+    public function provideDynamicApi(HookEvent $event) : void
+    {
+        $field = $event->arguments(1);
+
+        if ($field->name === 'dynamic_api') {
+            $settingsPage = $this->pages->get('template='.$this->template_options);
+            $options = [];
+
+            foreach ($settingsPage->repeater_api as $api) {
+                $options[$api->id] = $api->api_name;
+            }
+
+            $event->return = $options;
+        }
+    }
+
+    /**
+     * create fields function for the module
+     *
+     * @param $fields
+     * @return void
+     * @throws WirePermissionException
+     */
+    private function createFields($fields) : void
+    {
+        /**
+         * tabs for the menu in the settings page
+         */
+        if(!$fields->get('tab_api')) {
+            $field = new Field;
+            $field->type = $this->modules->get('FieldtypeFieldsetTabOpen');
+            $field->name = "tab_api";
+            $field->label = $this->_('API Einstellungen');
+            $field->tags = 'tabs';
+            $field->icon = 'Tag';
+            $field->save();
+        }
+
+        if(!$fields->get('tab_api_END')) {
+            $field = new Field;
+            $field->type = $this->modules->get('FieldtypeFieldsetClose');
+            $field->name = "tab_api_END";
+            $field->label = $this->_('Close an open fieldset');
+            $field->tags = 'tabs';
+            $field->icon = 'Tag';
+            $field->save();
+        }
+
+        /**
+         * generate fields
+         */
+        if (!$fields->get('api_name')) {
+            $f = new Field();
+            $f->name = 'api_name';
+            $f->type = $this->modules->get('FieldtypeText');
+            $f->label = 'Api Name';
+            $f->placeholder = 'Individueller API Name';
+            $f->columnWidth = 50;
+            $f->save();
+        }
+
+        if (!$fields->get('api_url')) {
+            $f = new Field();
+            $f->name = 'api_url';
+            $f->type = $this->modules->get('FieldtypeText');
+            $f->label = 'API URL';
+            $f->placeholder = 'https:// xxx /api/';
+            $f->columnWidth = 50;
+            $f->save();
+        }
+
+        if (!$fields->get('api_key')) {
+            $f = new Field();
+            $f->name = 'api_key';
+            $f->type = $this->modules->get('FieldtypeText');
+            $f->label = 'API Key';
+            $f->placeholder = 'API - KEY';
+            $f->columnWidth = 50;
+            $f->save();
+        }
+
+        if (!$fields->get('api_secret')) {
+            $f = new Field();
+            $f->name = 'api_secret';
+            $f->type = $this->modules->get('FieldtypeText');
+            $f->label = 'API Secret';
+            $f->placeholder = 'API - SECRET';
+            $f->columnWidth = 50;
+            $f->save();
+        }
+
+        /**
+         * dynamic categories news
+         */
+        if(!$fields->get('dynamic_api')) {
+            $field = new Field;
+            $field->type = $this->modules->get('FieldtypeDynamicOptions');
+            $field->name = "dynamic_api";
+            $field->label = $this->_('Api Connection auswählen');
+            $field->tags = 'dynamic';
+            $field->icon = 'Magic';
+            $field->inputfield_class = 'InputfieldSelect';
+            $field->save();
+        }
+
+        /**
+         *  Create repeater field if not exists
+         */
+        if(!$fields->get('repeater_api')) {
+            $id_api_name = $fields->get('api_name')->id;
+            $id_api_url = $fields->get('api_url')->id;
+            $id_api_key = $fields->get('api_key')->id;
+            $id_api_secret = $fields->get('api_secret')->id;
+
+            $field = new Field();
+            $field->type = $this->modules->get("FieldtypeRepeater");
+            $field->name = 'repeater_api';
+            $field->label = $this->_('Repeater (Api)');
+            $field->tags = 'repeater';
+            $field->icon = 'repeat';
+            $field->repeaterDepth = 3;
+            $field->repeaterTitle = '{api_name}';
+            $field->repeaterLoading = 1;
+            $field->repeaterFields = array( 0 => $id_api_name, 1 => $id_api_url , 2 => $id_api_key, 3 => $id_api_secret );
+            $field->save();
+
+            $repeater = $fields->get('repeater_api');
+
+            $repeater_template = $repeater->type->getRepeaterTemplate($repeater);
+            $repeater_template->fieldgroup->add('api_name');
+            $repeater_template->fieldgroup->add('api_url');
+            $repeater_template->fieldgroup->add('api_key');
+            $repeater_template->fieldgroup->add('api_secret');
+            $repeater_template->fieldgroup->save();
+            $repeater_template->save();
+        }
+    }
+
+    /**
+     * Handles an HTTP connection and sends a request to the specified URL.
+     *
+     * @param string $url The base URL for the request.
+     * @param string $urlSection The URL section to append to the base URL.
+     * @param array $headers The headers to include in the HTTP request.
+     * @param string $method The HTTP method to use for the request (default is 'GET').
+     * @param mixed|null $data The data to send with the request (if applicable).
+     * @return string The response received from the HTTP request.
+     */
+    public function connection($url, $urlSection, $headers, $method = 'GET', $data = null) : string
+    {
+        $http = new WireHttp();
+        $http->setHeaders($headers);
+        $http->setData($data);
+
+        return $http->send($url . $urlSection, $data, $method);
+    }
+}
