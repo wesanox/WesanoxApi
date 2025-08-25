@@ -1,0 +1,77 @@
+<?php
+
+return [
+    [
+        'name' => 'tab_api',
+        'type' => 'FieldsetTabOpen',
+        'label' => 'API Einstellungen',
+        'tags' => 'fieldsets',
+        'icon' => 'Tag',
+    ],
+    [
+        'name' => 'tab_api_END',
+        'type' => 'FieldsetClose',
+        'label' => 'Close an open fieldset',
+        'tags' => 'fieldsets',
+        'icon' => 'Tag',
+    ],
+    [
+        'name' => 'api_name',
+        'type' => 'Text',
+        'label' => 'API Name',
+        'tags' => 'settings',
+        'icon' => 'Cogs',
+        'width' => 50,
+        'placeholder' => 'Individueller API Name',
+    ],
+    [
+        'name' => 'api_url',
+        'type' => 'Text',
+        'label' => 'API URL',
+        'tags' => 'settings',
+        'icon' => 'Cogs',
+        'width' => 50,
+        'placeholder' => 'https:// xxx /api/',
+    ],
+    [
+        'name' => 'api_key',
+        'type' => 'Text',
+        'label' => 'API Key',
+        'tags' => 'settings',
+        'icon' => 'Cogs',
+        'width' => 50,
+        'placeholder' => 'API - KEY',
+    ],
+    [
+        'name' => 'api_secret',
+        'type' => 'Text',
+        'label' => 'API Secret',
+        'tags' => 'settings',
+        'icon' => 'Cogs',
+        'width' => 50,
+        'placeholder' => 'API - SECRET',
+    ],
+    [
+        'name' => 'dynamic_api',
+        'type' => 'DynamicOptions',
+        'label' => 'Api Connection auswählen',
+        'tags' => 'dynamic',
+        'icon' => 'Magic',
+        'width' => 50,
+        'inputfield_class' => 'InputfieldSelect',
+    ],
+    [
+        'name' => 'repeater_api',
+        'type' => 'Repeater',
+        'label' => 'Repeater (Api)',
+        'tags' => 'repeater',
+        'icon' => 'Repeat',
+        'width' => 100,
+        'fields' => [
+            'api_name',
+            'api_url',
+            'api_key',
+            'api_secret',
+        ]
+    ],
+];

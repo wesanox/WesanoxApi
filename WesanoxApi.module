@@ -8,7 +8,7 @@ class WesanoxApi extends WireData implements Module
         return array(
             'title' => 'wesanox API Connector',
             'summary' => 'A little API Connector for Processwire.',
-            'version' => '0.0.2',
+            'version' => '0.1.2',
             'author' => 'André Wester',
             'icon' => 'cogs',
             'singular' => true,
@@ -21,28 +21,33 @@ class WesanoxApi extends WireData implements Module
         );
     }
 
-    protected string $template_options;
-
     protected array $internal_modules = [
         'FieldtypeDynamicOptions',
     ];
 
-    protected array $content_fields = [
-        'repeater_api',
-        'api_name',
-        'api_url',
-        'api_key',
-        'api_secret',
-        'tab_api',
-        'tab_api_END'
+    /**
+     * @var Module|_Module|null $helper_fields
+     */
+    protected Module|_Module|null $helper_fields;
+
+    /**
+     * @var array $fields_array
+     */
+    protected array $fields_array = [];
+
+    protected array $templates_option = [
+        'options_generals',
     ];
+
+
 
     public function __construct()
     {
-        /**
-         * set the Template Name
-         */
-        $this->template_options  = 'options_generals';
+        parent::__construct();
+
+        $this->helper_fields = $this->modules->get('WesanoxHelperFields');
+
+        $this->fields_array = include $this->config->paths->WesanoxApi . 'config/fields.php';
     }
 
     /**
@@ -54,6 +59,9 @@ class WesanoxApi extends WireData implements Module
      */
     public function ___install() : void
     {
+        /**
+         * install the internal modules
+         */
         foreach ($this->internal_modules as $moduleName) {
             if (!$this->modules->isInstalled($moduleName)) {
                 $this->modules->get($moduleName);
@@ -61,37 +69,41 @@ class WesanoxApi extends WireData implements Module
         }
 
         /**
-         * create the fields for the custom menu
+         * create fields
          */
-        $this->createFields($this->fields);
+        foreach ($this->fields_array as $field_array) {
+            $this->helper_fields->createFields($field_array);
+        }
 
         /**
          * if not exists, create settings Page or add new Fields
          * to the settingspage
          */
-        if ( !$this->templates->get($this->template_options) ) {
-            $fg = new Fieldgroup();
-            $fg->name = $this->template_options;
-            $fg->add('title');
-            $fg->add('tab_api');
-            $fg->add('repeater_api');
-            $fg->add('tab_api_END');
-            $fg->save();
+        foreach ($this->templates_option AS $template_option) {
+            if (!$this->templates->get($template_option)) {
+                $fg = new Fieldgroup();
+                $fg->name = $template_option;
+                $fg->add('title');
+                $fg->add('tab_api');
+                $fg->add('repeater_api');
+                $fg->add('tab_api_END');
+                $fg->save();
 
-            $op = new Template();
-            $op->name = $this->template_options;
-            $op->label = 'Einstellungen';
-            $op->fieldgroup = $fg;
-            $op->icon = 'cogs';
-            $op->tags = 'Options';
-            $op->noParents = -1;
-            $op->save();
-        } else {
-            $op = $this->fieldgroups->get($this->template_options);
-            $op->add('tab_api');
-            $op->add('repeater_api');
-            $op->add('tab_api_END');
-            $op->save();
+                $t = new Template();
+                $t->name = $template_option;
+                $t->label = 'Einstellungen';
+                $t->fieldgroup = $fg;
+                $t->icon = 'cogs';
+                $t->tags = 'Options';
+                $t->noParents = -1;
+                $t->save();
+            } else {
+                $t = $this->fieldgroups->get($template_option);
+                $t->add('tab_api');
+                $t->add('repeater_api');
+                $t->add('tab_api_END');
+                $t->save();
+            }
         }
     }
 
@@ -106,24 +118,20 @@ class WesanoxApi extends WireData implements Module
         /**
          * remove fields from option page
          */
-        if($this->templates->get($this->template_options)) {
-            $op = $this->fieldgroups->get($this->template_options);
-            $op->remove('tab_api');
-            $op->remove('repeater_api');
-            $op->remove('tab_api_END');
-            $op->save();
+        foreach ($this->templates_option AS $template_option) {
+            if($this->templates->get($template_option)) {
+                $t = $this->fieldgroups->get($template_option);
+                $t->remove('tab_api');
+                $t->remove('repeater_api');
+                $t->remove('tab_api_END');
+                $t->save();
+            }
         }
 
         /**
          * delete fields
          */
-        foreach ($this->content_fields as $field_name) {
-            $field = $this->fields->get($field_name);
-
-            if ($field && $field->getFieldgroups()->count == 0) {
-                $this->fields->delete($field);
-            }
-        }
+        $this->helper_fields->deleteFields($this->fields_array);
     }
 
     /**
@@ -152,137 +160,6 @@ class WesanoxApi extends WireData implements Module
             }
 
             $event->return = $options;
-        }
-    }
-
-    /**
-     * create fields function for the module
-     *
-     * @param $fields
-     * @return void
-     * @throws WirePermissionException
-     */
-    private function createFields($fields) : void
-    {
-        /**
-         * tabs for the menu in the settings page
-         */
-        if(!$fields->get('tab_api')) {
-            $f = new Field;
-            $f->type = $this->modules->get('FieldtypeFieldsetTabOpen');
-            $f->name = "tab_api";
-            $f->label = $this->_('API Einstellungen');
-            $f->tags = 'tabs';
-            $f->icon = 'Tag';
-            $f->save();
-        }
-
-        if(!$fields->get('tab_api_END')) {
-            $f = new Field;
-            $f->type = $this->modules->get('FieldtypeFieldsetClose');
-            $f->name = "tab_api_END";
-            $f->label = $this->_('Close an open fieldset');
-            $f->tags = 'tabs';
-            $f->icon = 'Tag';
-            $f->save();
-        }
-
-        /**
-         * generate fields
-         */
-        if (!$fields->get('api_name')) {
-            $f = new Field();
-            $f->name = 'api_name';
-            $f->type = $this->modules->get('FieldtypeText');
-            $f->label = 'Api Name';
-            $f->placeholder = 'Individueller API Name';
-            $f->tags = 'settings';
-            $f->icon = 'Cogs';
-            $f->columnWidth = 50;
-            $f->save();
-        }
-
-        if (!$fields->get('api_url')) {
-            $f = new Field();
-            $f->name = 'api_url';
-            $f->type = $this->modules->get('FieldtypeText');
-            $f->label = 'API URL';
-            $f->placeholder = 'https:// xxx /api/';
-            $f->tags = 'settings';
-            $f->icon = 'Cogs';
-            $f->columnWidth = 50;
-            $f->save();
-        }
-
-        if (!$fields->get('api_key')) {
-            $f = new Field();
-            $f->name = 'api_key';
-            $f->type = $this->modules->get('FieldtypeText');
-            $f->label = 'API Key';
-            $f->placeholder = 'API - KEY';
-            $f->tags = 'settings';
-            $f->icon = 'Cogs';
-            $f->columnWidth = 50;
-            $f->save();
-        }
-
-        if (!$fields->get('api_secret')) {
-            $f = new Field();
-            $f->name = 'api_secret';
-            $f->type = $this->modules->get('FieldtypeText');
-            $f->label = 'API Secret';
-            $f->placeholder = 'API - SECRET';
-            $f->tags = 'settings';
-            $f->icon = 'Cogs';
-            $f->columnWidth = 50;
-            $f->save();
-        }
-
-        /**
-         * dynamic categories news
-         */
-        if(!$fields->get('dynamic_api')) {
-            $f = new Field;
-            $f->type = $this->modules->get('FieldtypeDynamicOptions');
-            $f->name = "dynamic_api";
-            $f->label = $this->_('Api Connection auswählen');
-            $f->tags = 'dynamic';
-            $f->icon = 'Magic';
-            $f->columnWidth = 25;
-            $f->inputfield_class = 'InputfieldSelect';
-            $f->save();
-        }
-
-        /**
-         *  Create repeater field if not exists
-         */
-        if(!$fields->get('repeater_api')) {
-            $id_api_name = $fields->get('api_name')->id;
-            $id_api_url = $fields->get('api_url')->id;
-            $id_api_key = $fields->get('api_key')->id;
-            $id_api_secret = $fields->get('api_secret')->id;
-
-            $f = new Field();
-            $f->type = $this->modules->get("FieldtypeRepeater");
-            $f->name = 'repeater_api';
-            $f->label = $this->_('Repeater (Api)');
-            $f->tags = 'repeater';
-            $f->icon = 'repeat';
-            $f->repeaterDepth = 3;
-            $f->repeaterTitle = '{api_name}';
-            $f->repeaterLoading = 1;
-            $f->repeaterFields = array( 0 => $id_api_name, 1 => $id_api_url , 2 => $id_api_key, 3 => $id_api_secret );
-            $f->save();
-
-            $repeater = $fields->get('repeater_api');
-
-            $repeater_template = $repeater->type->getRepeaterTemplate($repeater);
-            $repeater_template->fieldgroup->add('api_name');
-            $repeater_template->fieldgroup->add('api_url');
-            $repeater_template->fieldgroup->add('api_key');
-            $repeater_template->fieldgroup->add('api_secret');
-            $repeater_template->fieldgroup->save();
-            $repeater_template->save();
         }
     }
 
