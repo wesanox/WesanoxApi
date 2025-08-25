@@ -13,6 +13,7 @@ class ProcessWesanoxApi extends Process implements Module
             'icon' => 'cogs',
             'page'       => array(
                 'name' => 'wesanox-api',
+                'parent' => 'setup',
                 'title' => 'Apis',
             ),
             'requires' => 'WesanoxApi',
@@ -118,15 +119,17 @@ class ProcessWesanoxApi extends Process implements Module
         }
 
         if ($this->input->get('try')) {
-            $content = json_decode($this->tryApi($id));
+            $response = $this->tryApi($id);
+            $content = json_decode($response);
+
             if (isset($content->error)) {
                 $this->error(__($content->error));
             } elseif (isset($content->success)) {
                 $this->message(__($content->success));
+            } else {
+                $this->error(__($response));
             }
         }
-
-        bd($data);
 
         $form = $this->buildForm($data, $id);
         $form->action = $this->page->url . 'edit?id=' . $id;
