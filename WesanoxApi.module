@@ -21,14 +21,19 @@ class WesanoxApi extends WireData implements Module
         );
     }
 
-    protected array $internal_modules = [
-        'FieldtypeDynamicOptions',
+    /**
+     * @var array|string[] $external_modules
+     */
+    protected array $external_modules = [
+        'FieldtypeDynamicOptions' => 'https://github.com/Toutouwai/FieldtypeDynamicOptions/archive/refs/heads/master.zip',
     ];
 
     /**
+     * @var Module|_Module|null $helper_classes
      * @var Module|_Module|null $helper_fields
      */
     protected Module|_Module|null $helper_fields;
+    protected Module|_Module|null $helper_classes;
 
     /**
      * @var array $fields_array
@@ -45,6 +50,7 @@ class WesanoxApi extends WireData implements Module
     {
         parent::__construct();
 
+        $this->helper_classes = $this->modules->get('WesanoxHelperClasses');
         $this->helper_fields = $this->modules->get('WesanoxHelperFields');
 
         $this->fields_array = include $this->config->paths->WesanoxApi . 'config/fields.php';
@@ -60,11 +66,12 @@ class WesanoxApi extends WireData implements Module
     public function ___install() : void
     {
         /**
-         * install the internal modules
+         * Install external modules
          */
-        foreach ($this->internal_modules as $moduleName) {
-            if (!$this->modules->isInstalled($moduleName)) {
-                $this->modules->get($moduleName);
+        foreach ($this->external_modules as $module_name => $module_url) {
+            if (!$this->modules->isInstalled($module_name)) {
+                $message = $this->helper_classes->downloadInstall($module_name, $module_url);
+                if ($message !== true) $this->error($message);
             }
         }
 
