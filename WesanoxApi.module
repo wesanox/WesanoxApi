@@ -8,15 +8,17 @@ class WesanoxApi extends WireData implements Module
         return array(
             'title' => 'wesanox API Connector',
             'summary' => 'A little API Connector for Processwire.',
-            'version' => '0.1.2',
+            'version' => '0.5.0',
             'author' => 'André Wester',
             'icon' => 'cogs',
             'singular' => true,
             'autoload' => true,
-            'installs' => ['ProcessWesanoxApi', 'FieldtypeDynamicOptions'],
+            'installs' => ['WesanoxHelperFields','ProcessWesanoxApi','FieldtypeDynamicOptions'],
             'requires' => array(
                 'ProcessWire>=3.0.210',
                 'PHP>=8.0.0',
+                'WesanoxHelperClasses>=0.0.1',
+                'WesanoxHelperFields>=0.0.1',
             ),
         );
     }
@@ -26,6 +28,7 @@ class WesanoxApi extends WireData implements Module
      */
     protected array $external_modules = [
         'FieldtypeDynamicOptions' => 'https://github.com/Toutouwai/FieldtypeDynamicOptions/archive/refs/heads/master.zip',
+        'WesanoxHelperFields' => 'https://github.com/wesanox/WesanoxHelperFields/archive/refs/heads/main.zip',
     ];
 
     /**
@@ -41,8 +44,6 @@ class WesanoxApi extends WireData implements Module
     protected array $templates_option = [
         'options_generals',
     ];
-
-
 
     public function __construct()
     {
@@ -63,7 +64,11 @@ class WesanoxApi extends WireData implements Module
     public function ___install() : void
     {
         /**
+         * Install external modules
          */
+        foreach ($this->external_modules as $module_name => $module_url) {
+            if (!$this->modules->isInstalled($module_name)) {
+                $this->helper_classes->downloadInstall($module_name, $module_url);
             }
         }
 

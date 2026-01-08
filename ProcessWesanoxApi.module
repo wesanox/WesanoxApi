@@ -8,7 +8,7 @@ class ProcessWesanoxApi extends Process implements Module
         return array(
             'title' => 'wesanox API Process',
             'summary' => 'A little API Connector for Processwire.',
-            'version' => '0.0.1',
+            'version' => '0.5.0',
             'author' => 'wesanox',
             'icon' => 'cogs',
             'page'       => array(
@@ -61,20 +61,9 @@ class ProcessWesanoxApi extends Process implements Module
     public function ___executeAdd(): string
     {
         if ($this->input->post->submit) {
-            $api_name = $this->input->post->api_name;
-            $api_url = $this->input->post->api_url;
-            $api_key = $this->input->post->api_key;
-            $api_secret = $this->input->post->api_secret;
+            $this->saveApi(null, $this->input->post);
 
-            if (empty($api_name) || empty($api_url) || empty($api_key) || empty($api_secret)) {
-                $this->error(__('Please fill in all fields'));
-            } else {
-                $this->saveApi(null, $api_name, $api_url, $api_key, $api_secret);
-                $this->message(__('Api added'));
-                $this->session->redirect($this->page->url);
-            }
-
-            $data = compact('api_name', 'api_url', 'api_key', 'api_secret');
+            $this->session->redirect($this->page->url);;
         } else {
             $data = [];
         }
@@ -96,23 +85,14 @@ class ProcessWesanoxApi extends Process implements Module
         }
 
         if ($this->input->post->submit) {
-            $api_name = $this->input->post->api_name;
-            $api_url = $this->input->post->api_url;
-            $api_key = $this->input->post->api_key;
-            $api_secret = $this->input->post->api_secret;
-
-            if (empty($api_name) || empty($api_url) || empty($api_key) || empty($api_secret)) {
-                $this->error(__('Please fill in all fields'));
-            } else {
-                $this->saveApi($id, $api_name, $api_url, $api_key, $api_secret);
-                $this->message(__('Api saved'));
-            }
-
-            $data = compact('api_name', 'api_url', 'api_key', 'api_secret');
+            $data = $this->saveApi($id, $this->input->post);
         } else {
             $data = [
                 'api_name' => $api->api_name,
                 'api_url' => $api->api_url,
+                'api_select_method' => $api->api_select_method,
+                'api_username' => $api->api_username,
+                'api_password' => $api->api_password,
                 'api_key' => $api->api_key,
                 'api_secret' => $api->api_secret,
             ];
@@ -122,10 +102,10 @@ class ProcessWesanoxApi extends Process implements Module
             $response = $this->tryApi($id);
             $content = json_decode($response);
 
-            if (isset($content->error)) {
-                $this->error(__($content->error));
-            } elseif (isset($content->success)) {
-                $this->message(__($content->success));
+            if ($content->status === 'error') {
+                $this->error(__($content->data));
+            } elseif ($content->status === 'success') {
+                $this->message(__($content->data));
             } else {
                 $this->error(__($response));
             }
@@ -165,9 +145,13 @@ class ProcessWesanoxApi extends Process implements Module
         $defaults = [
             'api_name' => '',
             'api_url' => '',
+            'api_select_method' => '',
+            'api_username' => '',
+            'api_password' => '',
             'api_key' => '',
             'api_secret' => '',
         ];
+
         $data = array_merge($defaults, $data);
 
         $f = $this->modules->get('InputfieldText');
@@ -181,26 +165,65 @@ class ProcessWesanoxApi extends Process implements Module
 
         $f = $this->modules->get('InputfieldText');
         $f->label = __('API URL');
-        $f->columnWidth = 50;
+        $f->description = __('Any combination of letters (a-z), numbers (0-9).');
+        $f->columnWidth = 25;
         $f->attr('name', 'api_url');
         $f->attr('value', $data['api_url']);
         $f->required = true;
         $wrapper->add($f);
 
-        $f = $this->modules->get('InputfieldText');
-        $f->label = __('API Key');
-        $f->columnWidth = 50;
-        $f->attr('name', 'api_key');
-        $f->attr('value', $data['api_key']);
+        $f = $this->modules->get('InputfieldSelect');
+        $f->label = __('API Method');
+        $f->description = __('Any combination of letters (a-z), numbers (0-9).');
+        $f->columnWidth = 25;
+        $f->attr('name', 'api_select_method');
+        $f->attr('value', $data['api_select_method']);
+        $f->addOptions([
+                1 => 'No Auth',
+                2 => 'API Key',
+                3 => 'Bearer Token',
+                4 => 'Basic Auth'
+            ]);
         $f->required = true;
         $wrapper->add($f);
 
         $f = $this->modules->get('InputfieldText');
+        $f->label = __('API Username');
+        $f->description = __('Any combination of letters (a-z), numbers (0-9).');
+        $f->columnWidth = 50;
+        $f->attr('name', 'api_username');
+        $f->attr('value', $data['api_username']);
+        $f->showIf = 'api_select_method=4';
+        $f->requiredIf = 'api_select_method=4';
+        $wrapper->add($f);
+
+        $f = $this->modules->get('InputfieldText');
+        $f->label = __('API Password / Token');
+        $f->description = __('Any combination of letters (a-z), numbers (0-9).');
+        $f->columnWidth = ($data['api_select_method'] === 3) ? 100 : 50;
+        $f->attr('name', 'api_password');
+        $f->attr('value', $data['api_password']);
+        $f->showIf = 'api_select_method=3|4';
+        $f->requiredIf = 'api_select_method=3|4';
+        $wrapper->add($f);
+
+        $f = $this->modules->get('InputfieldText');
+        $f->label = __('API Key');
+        $f->description = __('Any combination of letters (a-z), numbers (0-9).');
+        $f->columnWidth = 50;
+        $f->attr('name', 'api_key');
+        $f->attr('value', $data['api_key']);
+        $f->showIf = 'api_select_method=2';
+        $f->requiredIf = 'api_select_method=2';
+        $wrapper->add($f);
+
+        $f = $this->modules->get('InputfieldText');
         $f->label = __('API Secret');
+        $f->description = __('Any combination of letters (a-z), numbers (0-9).');
         $f->columnWidth = 50;
         $f->attr('name', 'api_secret');
         $f->attr('value', $data['api_secret']);
-        $f->required = true;
+        $f->showIf = 'api_select_method=2';
         $wrapper->add($f);
 
         $submit = $this->modules->get('InputfieldSubmit');
@@ -224,15 +247,26 @@ class ProcessWesanoxApi extends Process implements Module
      * Add new API - Item or edit existing API - Item
      *
      * @param string|null $id
-     * @param string $api_name
-     * @param string $api_url
-     * @param string $api_key
-     * @param string $api_secret
+     * @param $api_name
      * @return Page|null
+     * @throws WireException
      */
-    private function saveApi(?string $id, string $api_name, string $api_url, string $api_key, string $api_secret): ?Page
+    private function saveApi(?string $id, $api_data): array|null
     {
         $this->template_options->of(false);
+
+        $api_name = $this->sanitizer->text($api_data->api_name);
+        $api_url = $this->sanitizer->url($api_data->api_url);
+        $api_select_method = $this->sanitizer->int($api_data->api_select_method);
+        $api_username = $this->sanitizer->text($api_data->api_username);
+        $api_password = $this->sanitizer->text($api_data->api_password);
+        $api_key = $this->sanitizer->text($api_data->api_key);
+        $api_secret = $this->sanitizer->text($api_data->api_secret);
+
+        if (!$api_name || !$api_url || !$api_select_method) {
+            $this->error(__('Please fill in the required fields'));
+            return null;
+        }
 
         if ($id) {
             $api = $this->template_options->repeater_api->get("id=$id");
@@ -248,13 +282,18 @@ class ProcessWesanoxApi extends Process implements Module
 
         $api->api_name = $api_name;
         $api->api_url = $api_url;
+        $api->api_select_method = $api_select_method;
+        $api->api_username = $api_username;
+        $api->api_password = $api_password;
         $api->api_key = $api_key;
         $api->api_secret = $api_secret;
         $api->save();
 
         $this->template_options->save();
 
-        return $api;
+        $this->message(__('Api added'));
+
+        return compact('api_name', 'api_url', 'api_select_method', 'api_username', 'api_password', 'api_key', 'api_secret');
     }
 
     /**
@@ -266,15 +305,45 @@ class ProcessWesanoxApi extends Process implements Module
     private function tryApi($id)
     {
         $parent_module = $this->modules->get('WesanoxApi');
-
         $api = $this->template_options->repeater_api->get("id=$id");
 
-        $headers = [
-            'wesanoxKey'    => $api->api_key,
-            'wesanoxSecret' => $api->api_secret,
-        ];
+        if (!$api instanceof Page || !$api->id) {
+            return json_encode([
+                'status' => 'error',
+                'data' => 'API not found'
+            ]);
+        }
 
-        return $parent_module->connection($api->api_url, 'hello', $headers);
+        $headers = [];
+
+        $method  = (int) $api->api_select_method->id;
+
+        switch ($method) {
+            case 1:
+                break;
+            case 2:
+                $headers['X-API-KEY'] = $api->api_key;
+
+                if ($api->api_secret) $headers['X-API-SECRET'] = $api->api_secret;
+
+                break;
+            case 3:
+                $headers['Authorization'] = 'Bearer ' . $api->api_password;
+                break;
+            case 4:
+                $token = base64_encode(
+                    $api->api_username . ':' . $api->api_password
+                );
+                $headers['Authorization'] = 'Basic ' . $token;
+                break;
+            default:
+                return json_encode([
+                    'status' => 'error',
+                    'data' => 'Unknown API auth method'
+                ]);
+        }
+
+        return $parent_module->connection($api->api_url,'hello', $headers);
     }
 
     /**
