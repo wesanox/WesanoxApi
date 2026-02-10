@@ -304,46 +304,7 @@ class ProcessWesanoxApi extends Process implements Module
      */
     private function tryApi($id)
     {
-        $parent_module = $this->modules->get('WesanoxApi');
-        $api = $this->template_options->repeater_api->get("id=$id");
-
-        if (!$api instanceof Page || !$api->id) {
-            return json_encode([
-                'status' => 'error',
-                'data' => 'API not found'
-            ]);
-        }
-
-        $headers = [];
-
-        $method  = (int) $api->api_select_method->id;
-
-        switch ($method) {
-            case 1:
-                break;
-            case 2:
-                $headers['X-API-KEY'] = $api->api_key;
-
-                if ($api->api_secret) $headers['X-API-SECRET'] = $api->api_secret;
-
-                break;
-            case 3:
-                $headers['Authorization'] = 'Bearer ' . $api->api_password;
-                break;
-            case 4:
-                $token = base64_encode(
-                    $api->api_username . ':' . $api->api_password
-                );
-                $headers['Authorization'] = 'Basic ' . $token;
-                break;
-            default:
-                return json_encode([
-                    'status' => 'error',
-                    'data' => 'Unknown API auth method'
-                ]);
-        }
-
-        return $parent_module->connection($api->api_url,'hello', $headers);
+        return $this->modules->get('WesanoxApi')->requestByApiId((int)$id, 'hello');
     }
 
     /**

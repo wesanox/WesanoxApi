@@ -156,15 +156,101 @@ class WesanoxApi extends WireData implements Module
         $field = $event->arguments(1);
 
         if ($field->name === 'dynamic_api') {
-            $settingsPage = $this->pages->get('template='.$this->template_options);
+            $settings_page = $this->pages->get('template=' . $this->templates_option[0]);
             $options = [];
 
-            foreach ($settingsPage->repeater_api as $api) {
+            foreach ($settings_page->repeater_api as $api) {
                 $options[$api->id] = $api->api_name;
             }
 
             $event->return = $options;
         }
+    }
+
+    /**
+     * @param int $id
+     *
+     * @return Page|null/
+     *
+     * @throws WireException
+     */
+    public function getApiItem(int $id): ?Page
+    {
+        if(!$id) return null;
+
+        $options = $this->pages->get('template=options_generals');
+        $api = $options->repeater_api->get("id=$id");
+
+        return ($api instanceof Page && $api->id) ? $api : null;
+    }
+
+    /**
+     * @param Page $api
+     *
+     * @return array
+     *
+     * @throws WireException
+     */
+    public function buildAuthHeaders(Page $api): array
+    {
+        $headers = [];
+
+        $method = (int) $api->api_select_method->id;
+
+        switch ($method) {
+            case 1:
+                break;
+            case 2:
+                if($api->api_key) $headers['X-API-KEY'] = (string) $api->api_key;
+                if($api->api_secret) $headers['X-API-SECRET'] = (string) $api->api_secret;
+
+                break;
+            case 3:
+                if($api->api_password) $headers['Authorization'] = 'Bearer ' . (string) $api->api_password;
+
+                break;
+            case 4:
+                $user = (string) $api->api_username;
+                $pass = (string) $api->api_password;
+
+                if($user !== '' || $pass !== '') {
+                    $headers['Authorization'] = 'Basic ' . base64_encode("$user:$pass");
+                }
+
+                break;
+            default:
+                throw new WireException('Unknown API auth method: ' . $method);
+        }
+
+        return $headers;
+    }
+
+    /**
+     * @param int $apiId
+     * @param string $endpoint
+     * @param array $extraHeaders
+     *
+     * @return false|string
+     *
+     * @throws WireException
+     */
+    public function requestByApiId(int $id, string $endpoint, array $extra_headers = [], string $method = 'GET', $data = null) {
+        $api = $this->getApiItem($id);
+
+        if(!$api) {
+            return json_encode([
+                'status' => 'error',
+                'data' => 'API not found'
+            ]);
+        }
+
+        try {
+            $headers = array_merge($this->buildAuthHeaders($api), $extra_headers);
+        } catch(\Throwable $e) {
+            return json_encode(['status' => 'error', 'data' => $e->getMessage()]);
+        }
+
+        return $this->connection((string) $api->api_url, $endpoint, $headers, $method, $data);
     }
 
     /**
