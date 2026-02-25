@@ -89,7 +89,7 @@ return [
         'label' => 'Api Connection auswählen',
         'tags' => 'api',
         'icon' => 'Magic',
-        'width' => 50,
+        'width' => 25,
         'inputfield_class' => 'InputfieldSelect',
     ],
     [

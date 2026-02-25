@@ -8,7 +8,7 @@ class WesanoxApi extends WireData implements Module
         return array(
             'title' => 'wesanox API Connector',
             'summary' => 'A little API Connector for Processwire.',
-            'version' => '0.5.0',
+            'version' => '0.5.1',
             'author' => 'André Wester',
             'icon' => 'cogs',
             'singular' => true,
@@ -263,16 +263,25 @@ class WesanoxApi extends WireData implements Module
      * @param mixed|null $data The data to send with the request (if applicable).
      * @return string The response received from the HTTP request.
      */
-    public function connection($url, $urlSection, $headers, $method = 'GET', $data = null) : string
+    public function connection($url, $urlSection, $headers, $method = 'GET', $data = null): string
     {
         $http = new WireHttp();
-        $http->setHeaders($headers);
-        $http->setData($data);
 
-        if (strpos($url, '/api/') !== false) {
-            return $http->send($url . $urlSection, $data, $method);
-        } else {
-            return 'The API - URL is not correct - please check and try again.';
+        $fullUrl = rtrim($url, '/') . '/' . ltrim($urlSection, '/');
+
+        $headers = array_merge($headers, [
+            'Accept' => 'application/json',
+        ]);
+
+        if (in_array(strtoupper($method), ['POST', 'PUT', 'PATCH'], true)) {
+            $headers['Content-Type'] = 'application/json';
+            $payload = $data !== null ? json_encode($data) : null;
+
+            $http->setHeaders($headers);
+            return $http->send($fullUrl, $payload, $method);
         }
+
+        $http->setHeaders($headers);
+        return $http->send($fullUrl, $data, $method);
     }
 }
